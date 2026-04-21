@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>IDRW Game Prototype</title>
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #0b1020;
+      color: white;
+      margin: 0;
+      padding: 20px;
+    }
+
+    input, button {
+      padding: 8px;
+      margin: 4px;
+    }
+
+    .box {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #333;
+    }
+
+    .player {
+      padding: 4px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>IDRW Prototype</h2>
+
+<!-- CREATE GAME -->
+<div class="box">
+  <h3>Create Game</h3>
+  <input id="createCode" placeholder="Game Code (e.g. ABCD)" />
+  <input id="createName" placeholder="Your Name" />
+  <button onclick="createGame()">Create</button>
+</div>
+
+<!-- JOIN GAME -->
+<div class="box">
+  <h3>Join Game</h3>
+  <input id="joinCode" placeholder="Game Code" />
+  <input id="joinName" placeholder="Your Name" />
+  <button onclick="joinGame()">Join</button>
+</div>
+
+<!-- GAME INFO -->
+<div class="box">
+  <h3>Game</h3>
+  <div>Game ID: <span id="gameId">-</span></div>
+  <div>Status: <span id="gameStatus">-</span></div>
+  <div>Turn: <span id="gameTurn">-</span></div>
+</div>
+
+<!-- PLAYERS -->
+<div class="box">
+  <h3>Players</h3>
+  <div id="players"></div>
+</div>
+
+<script>
+/* =========================
+   SUPABASE INIT
+========================= */
+
+const supabase = supabase.createClient(
+  "https://hqcnrrfeyquoqikwmlnd.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxY25ycmZleXF1b3Fpa3dtbG5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MzM2NDAsImV4cCI6MjA5MjMwOTY0MH0._7umO9dIRzB5Gp_GsBedG2ySJ2SRzfPcoMnVbPGBMvI"
+)
+
+
+/* =========================
+   ANON PLAYER IDENTITY
+========================= */
+
+function getToken() {
+  let token = localStorage.getItem("player_token")
+
+  if (!token) {
+    token = crypto.randomUUID() + crypto.randomUUID()
+    localStorage.setItem("player_token", token)
+  }
+
+  return token
+}
+
+/* =========================
+   STATE
+========================= */
+
+let currentGameId = null
+let channel = null
+
+/* =========================
+   CREATE GAME
+========================= */
+
+async function createGame() {
+  const code = document.getElementById("createCode").value
+  const name = document.getElementById("createName").value
+
+  const { data, error } = await supabase.rpc("create_game", {
+    p_game_code: code,
+    p_display_name: name,
+    p_token: getToken()
+  })
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  currentGameId = data
+  document.getElementById("gameId").innerText = data
+
+  subscribeToGame(data)
+}
+
+/* =========================
+   JOIN GAME
+========================= */
+
+async function joinGame() {
+  const code = document.getElementById("joinCode").value
+  const name = document.getElementById("joinName").value
+
+  const { data, error } = await supabase.rpc("join_game", {
+    p_game_code: code,
+    p_display_name: name,
+    p_token: getToken()
+  })
+
+  if (error) {
+    alert(error.message)
+    return
+  }
+
+  currentGameId = data
+  document.getElementById("gameId").innerText = data
+
+  subscribeToGame(data)
+}
+
+/* =========================
+   SUBSCRIBE TO GAME
+========================= */
+
+function subscribeToGame(gameId) {
+
+  // cleanup old channel
+  if (channel) {
+    channel.unsubscribe()
+  }
+
+  channel = supabase.channel(`game-${gameId}`)
+
+  // GAME UPDATES
+  channel.on(
+    "postgres_changes",
+    {
+      event: "*",
+      schema: "public",
+      table: "IDRWgames",
+      filter: `id=eq.${gameId}`
+    },
+    (payload) => {
+      const game = payload.new
+
+      document.getElementById("gameStatus").innerText = game.status
+      document.getElementById("gameTurn").innerText = game.current_turn
+    }
+  )
+
+  // PLAYER UPDATES
+  channel.on(
+    "postgres_changes",
+    {
+      event: "*",
+      schema: "public",
+      table: "IDRWplayers",
+      filter: `game_id=eq.${gameId}`
+    },
+    async () => {
+      await loadPlayers(gameId)
+    }
+  )
+
+  channel.subscribe()
+}
+
+/* =========================
+   LOAD PLAYERS
+========================= */
+
+async function loadPlayers(gameId) {
+  const { data } = await supabase
+    .from("IDRWplayers")
+    .select("*")
+    .eq("game_id", gameId)
+
+  const container = document.getElementById("players")
+  container.innerHTML = ""
+
+  data.forEach(p => {
+    const div = document.createElement("div")
+    div.className = "player"
+    div.innerText = `Seat ${p.seat_number}: ${p.display_name}`
+    container.appendChild(div)
+  })
+}
+
+</script>
+
+</body>
+</html>
