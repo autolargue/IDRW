@@ -160,26 +160,38 @@ async function joinGame() {
 /* =========================
    SUBSCRIBE TO GAME
 ========================= */
-
 function subscribeToGame(gameId) {
 
-  // cleanup old channel
   if (channel) {
     channel.unsubscribe()
   }
 
   channel = supabaseClient.channel(`game-${gameId}`)
 
-  // GAME UPDATES
+  // 🔥 LOBBY SYNC: players table
   channel.on(
     "postgres_changes",
     {
       event: "*",
       schema: "public",
-      table: "idrwgames",
+      table: "IDRWplayers"
+    },
+    async () => {
+      console.log("lobby update → reloading players")
+      await loadPlayers(gameId)
+    }
+  )
+
+  // 🔥 GAME STATE SYNC (optional for now)
+  channel.on(
+    "postgres_changes",
+    {
+      event: "*",
+      schema: "public",
+      table: "IDRWgames",
       filter: `id=eq.${gameId}`
     },
-    (payload) => {
+    async (payload) => {
       const game = payload.new
 
       document.getElementById("gameStatus").innerText = game.status
@@ -187,23 +199,9 @@ function subscribeToGame(gameId) {
     }
   )
 
-  // PLAYER UPDATES
-  channel.on(
-    "postgres_changes",
-    {
-      event: "*",
-      schema: "public",
-      table: "idrwplayers",
-      filter: `game_id=eq.${gameId}`
-    },
-    async () => {
-      console.log("players update fired")
-      await loadPlayers(gameId)
-    }
-  )
-
   channel.subscribe()
 }
+
 
 /* =========================
    LOAD PLAYERS
