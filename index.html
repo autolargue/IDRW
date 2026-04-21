@@ -125,7 +125,7 @@ console.log("createGame result:", { data, error })
 
   currentGameId = data
   document.getElementById("gameId").innerText = data
-  await supabaseClient.loadPlayers(data) 
+  await loadPlayers(data) 
   subscribeToGame(data)
 }
 
