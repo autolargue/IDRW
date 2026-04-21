@@ -125,7 +125,7 @@ console.log("createGame result:", { data, error })
 
   currentGameId = data
   document.getElementById("gameId").innerText = data
-
+  await loadPlayers(data) 
   subscribeToGame(data)
 }
 
@@ -153,7 +153,7 @@ async function joinGame() {
 
   currentGameId = data
   document.getElementById("gameId").innerText = data
-
+  await loadPlayers(data) 
   subscribeToGame(data)
 }
 
@@ -197,6 +197,7 @@ function subscribeToGame(gameId) {
       filter: `game_id=eq.${gameId}`
     },
     async () => {
+      console.log("players update fired")
       await loadPlayers(gameId)
     }
   )
