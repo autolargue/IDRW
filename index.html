@@ -72,7 +72,7 @@
    SUPABASE INIT
 ========================= */
 
-const supabase = supabase.createClient(
+const supabaseClient = supabase.createClient(
   "https://hqcnrrfeyquoqikwmlnd.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxY25ycmZleXF1b3Fpa3dtbG5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MzM2NDAsImV4cCI6MjA5MjMwOTY0MH0._7umO9dIRzB5Gp_GsBedG2ySJ2SRzfPcoMnVbPGBMvI"
 )
@@ -105,14 +105,18 @@ let channel = null
 ========================= */
 
 async function createGame() {
+  console.log("createGame clicked")
   const code = document.getElementById("createCode").value
   const name = document.getElementById("createName").value
 
-  const { data, error } = await supabase.rpc("create_game", {
+  const { data, error } = await supabaseClient.rpc("create_game", {
     p_game_code: code,
     p_display_name: name,
     p_token: getToken()
   })
+
+console.log("createGame result:", { data, error })
+
 
   if (error) {
     alert(error.message)
@@ -130,14 +134,17 @@ async function createGame() {
 ========================= */
 
 async function joinGame() {
+  console.log("joinGame clicked")
   const code = document.getElementById("joinCode").value
   const name = document.getElementById("joinName").value
 
-  const { data, error } = await supabase.rpc("join_game", {
+  const { data, error } = await supabaseClient.rpc("join_game", {
     p_game_code: code,
     p_display_name: name,
     p_token: getToken()
   })
+
+  console.log("joinGame result:", { data, error })
 
   if (error) {
     alert(error.message)
@@ -161,7 +168,7 @@ function subscribeToGame(gameId) {
     channel.unsubscribe()
   }
 
-  channel = supabase.channel(`game-${gameId}`)
+  channel = supabaseClient.channel(`game-${gameId}`)
 
   // GAME UPDATES
   channel.on(
