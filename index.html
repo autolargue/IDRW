@@ -125,7 +125,7 @@ console.log("createGame result:", { data, error })
 
   currentGameId = data
   document.getElementById("gameId").innerText = data
-  await loadPlayers(data) 
+  await supabaseClient.loadPlayers(data) 
   subscribeToGame(data)
 }
 
@@ -210,7 +210,7 @@ function subscribeToGame(gameId) {
 ========================= */
 
 async function loadPlayers(gameId) {
-  const { data } = await supabase
+  const { data } = await supabaseClient
     .from("IDRWplayers")
     .select("*")
     .eq("game_id", gameId)
