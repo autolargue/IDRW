@@ -199,7 +199,9 @@ function subscribeToGame(gameId) {
     }
   )
 
-  channel.subscribe()
+channel.subscribe((status) => {
+  console.log("Realtime status:", status)
+})
 }
 
 
