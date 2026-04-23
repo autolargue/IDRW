@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <title>idrw Game Prototype</title>
 
-  <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
@@ -37,7 +36,6 @@
 
 <h2>idrw Prototype</h2>
 
-<!-- CREATE GAME -->
 <div class="box">
   <h3>Create Game</h3>
   <input id="createCode" placeholder="Game Code (e.g. ABCD)" />
@@ -45,7 +43,6 @@
   <button onclick="createGame()">Create</button>
 </div>
 
-<!-- JOIN GAME -->
 <div class="box">
   <h3>Join Game</h3>
   <input id="joinCode" placeholder="Game Code" />
@@ -53,7 +50,6 @@
   <button onclick="joinGame()">Join</button>
 </div>
 
-<!-- GAME INFO -->
 <div class="box">
   <h3>Game</h3>
   <div>Game ID: <span id="gameId">-</span></div>
@@ -61,47 +57,29 @@
   <div>Turn: <span id="gameTurn">-</span></div>
 </div>
 
-<!-- PLAYERS -->
 <div class="box">
   <h3>Players</h3>
   <div id="players"></div>
 </div>
 
 <script>
-/* =========================
-   SUPABASE INIT
-========================= */
 
 const supabaseClient = supabase.createClient(
   "https://hqcnrrfeyquoqikwmlnd.supabase.co",
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxY25ycmZleXF1b3Fpa3dtbG5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MzM2NDAsImV4cCI6MjA5MjMwOTY0MH0._7umO9dIRzB5Gp_GsBedG2ySJ2SRzfPcoMnVbPGBMvI"
 )
 
-/* =========================
-   PLAYER TOKEN
-========================= */
+let currentGameId = null
+let channel = null
 
 function getToken() {
   let token = localStorage.getItem("player_token")
-
   if (!token) {
     token = crypto.randomUUID() + crypto.randomUUID()
     localStorage.setItem("player_token", token)
   }
-
   return token
 }
-
-/* =========================
-   STATE
-========================= */
-
-let currentGameId = null
-let channel = null
-
-/* =========================
-   CREATE GAME
-========================= */
 
 async function createGame() {
   const code = document.getElementById("createCode").value.toUpperCase()
@@ -126,13 +104,11 @@ async function createGame() {
   currentGameId = data
   document.getElementById("gameId").innerText = data
 
-  await loadPlayers(data)
   subscribeToGame(data)
-}
 
-/* =========================
-   JOIN GAME
-========================= */
+  // 🔥 CRITICAL: guaranteed sync for creator
+  await loadPlayers(data)
+}
 
 async function joinGame() {
   const code = document.getElementById("joinCode").value.toUpperCase()
@@ -157,13 +133,11 @@ async function joinGame() {
   currentGameId = data
   document.getElementById("gameId").innerText = data
 
-  await loadPlayers(data)
   subscribeToGame(data)
-}
 
-/* =========================
-   REALTIME SYNC
-========================= */
+  // 🔥 CRITICAL: immediate refresh for joiner
+  await loadPlayers(data)
+}
 
 function subscribeToGame(gameId) {
 
@@ -173,45 +147,22 @@ function subscribeToGame(gameId) {
 
   channel = supabaseClient.channel(`game-${gameId}`)
 
-  // 🔥 MASTER SYNC TRIGGER
-  // Any update to game row forces full player refresh
-  channel.on(
-    "postgres_changes",
-    {
-      event: "UPDATE",
-      schema: "public",
-      table: "idrwgames",
-      filter: `id=eq.${gameId}`
-    },
-    async () => {
-      console.log("game update → refreshing players")
-      await loadPlayers(gameId)
-    }
-  )
-
-  // UI state updates (optional)
+  // optional realtime safety net (NOT primary sync)
   channel.on(
     "postgres_changes",
     {
       event: "*",
       schema: "public",
-      table: "IDRWgames",
-      filter: `id=eq.${gameId}`
+      table: "idrwplayers",
+      filter: `game_id=eq.${gameId}`
     },
-    (payload) => {
-      const game = payload.new
-
-      document.getElementById("gameStatus").innerText = game.status
-      document.getElementById("gameTurn").innerText = game.current_turn
+    async () => {
+      await loadPlayers(gameId)
     }
   )
 
   channel.subscribe()
 }
-
-/* =========================
-   LOAD PLAYERS
-========================= */
 
 async function loadPlayers(gameId) {
   const { data, error } = await supabaseClient
