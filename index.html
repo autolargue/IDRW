@@ -77,7 +77,6 @@ const supabaseClient = supabase.createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxY25ycmZleXF1b3Fpa3dtbG5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MzM2NDAsImV4cCI6MjA5MjMwOTY0MH0._7umO9dIRzB5Gp_GsBedG2ySJ2SRzfPcoMnVbPGBMvI"
 )
 
-
 /* =========================
    ANON PLAYER IDENTITY
 ========================= */
@@ -106,8 +105,14 @@ let channel = null
 
 async function createGame() {
   console.log("createGame clicked")
-  const code = document.getElementById("createCode").value
+
+  const code = document.getElementById("createCode").value.toUpperCase()
   const name = document.getElementById("createName").value
+
+  if (!code || !name) {
+    alert("Enter game code and name")
+    return
+  }
 
   const { data, error } = await supabaseClient.rpc("create_game", {
     p_game_code: code,
@@ -115,8 +120,7 @@ async function createGame() {
     p_token: getToken()
   })
 
-console.log("createGame result:", { data, error })
-
+  console.log("createGame result:", { data, error })
 
   if (error) {
     alert(error.message)
@@ -125,7 +129,8 @@ console.log("createGame result:", { data, error })
 
   currentGameId = data
   document.getElementById("gameId").innerText = data
-  await loadPlayers(data) 
+
+  await loadPlayers(data)
   subscribeToGame(data)
 }
 
@@ -135,8 +140,14 @@ console.log("createGame result:", { data, error })
 
 async function joinGame() {
   console.log("joinGame clicked")
-  const code = document.getElementById("joinCode").value
+
+  const code = document.getElementById("joinCode").value.toUpperCase()
   const name = document.getElementById("joinName").value
+
+  if (!code || !name) {
+    alert("Enter game code and name")
+    return
+  }
 
   const { data, error } = await supabaseClient.rpc("join_game", {
     p_game_code: code,
@@ -153,13 +164,15 @@ async function joinGame() {
 
   currentGameId = data
   document.getElementById("gameId").innerText = data
-  await loadPlayers(data) 
+
+  await loadPlayers(data)
   subscribeToGame(data)
 }
 
 /* =========================
    SUBSCRIBE TO GAME
 ========================= */
+
 function subscribeToGame(gameId) {
 
   if (channel) {
@@ -168,13 +181,14 @@ function subscribeToGame(gameId) {
 
   channel = supabaseClient.channel(`game-${gameId}`)
 
-  // 🔥 LOBBY SYNC: players table
+  // PLAYERS SYNC (filtered to current game)
   channel.on(
     "postgres_changes",
     {
       event: "*",
       schema: "public",
-      table: "IDRWplayers"
+      table: "idrwplayers",
+      filter: `game_id=eq.${gameId}`
     },
     async () => {
       console.log("lobby update → reloading players")
@@ -182,7 +196,7 @@ function subscribeToGame(gameId) {
     }
   )
 
-  // 🔥 GAME STATE SYNC (optional for now)
+  // GAME STATE SYNC
   channel.on(
     "postgres_changes",
     {
@@ -202,16 +216,20 @@ function subscribeToGame(gameId) {
   channel.subscribe()
 }
 
-
 /* =========================
    LOAD PLAYERS
 ========================= */
 
 async function loadPlayers(gameId) {
-  const { data } = await supabaseClient
+  const { data, error } = await supabaseClient
     .from("idrwplayers")
     .select("*")
     .eq("game_id", gameId)
+
+  if (error) {
+    console.error("loadPlayers error:", error)
+    return
+  }
 
   const container = document.getElementById("players")
   container.innerHTML = ""
