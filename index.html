@@ -2,35 +2,42 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>IDRW Game Prototype</title>
+  <title>idrw Game Prototype</title>
 
+  <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <style>
     body {
-      font-family: Arial;
+      font-family: Arial, sans-serif;
       background: #0b1020;
       color: white;
+      margin: 0;
       padding: 20px;
     }
 
     input, button {
-      padding: 6px;
+      padding: 8px;
       margin: 4px;
     }
 
     .box {
-      border: 1px solid #333;
+      margin-top: 20px;
       padding: 10px;
-      margin-top: 15px;
+      border: 1px solid #333;
+    }
+
+    .player {
+      padding: 4px;
     }
   </style>
 </head>
 
 <body>
 
-<h2>IDRW Roll & Write Prototype</h2>
+<h2>idrw Prototype</h2>
 
+<!-- CREATE GAME -->
 <div class="box">
   <h3>Create Game</h3>
   <input id="createCode" placeholder="Game Code (e.g. ABCD)" />
@@ -38,6 +45,7 @@
   <button onclick="createGame()">Create</button>
 </div>
 
+<!-- JOIN GAME -->
 <div class="box">
   <h3>Join Game</h3>
   <input id="joinCode" placeholder="Game Code" />
@@ -45,13 +53,15 @@
   <button onclick="joinGame()">Join</button>
 </div>
 
+<!-- GAME INFO -->
 <div class="box">
-  <h3>Game Info</h3>
+  <h3>Game</h3>
   <div>Game ID: <span id="gameId">-</span></div>
   <div>Status: <span id="gameStatus">-</span></div>
   <div>Turn: <span id="gameTurn">-</span></div>
 </div>
 
+<!-- PLAYERS -->
 <div class="box">
   <h3>Players</h3>
   <div id="players"></div>
@@ -59,16 +69,17 @@
 
 <script>
 /* =========================
-   SUPABASE CLIENT
+   SUPABASE INIT
 ========================= */
 
 const supabaseClient = supabase.createClient(
-  "YOUR_SUPABASE_URL",
-  "YOUR_SUPABASE_ANON_KEY"
+  "https://hqcnrrfeyquoqikwmlnd.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhxY25ycmZleXF1b3Fpa3dtbG5kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MzM2NDAsImV4cCI6MjA5MjMwOTY0MH0._7umO9dIRzB5Gp_GsBedG2ySJ2SRzfPcoMnVbPGBMvI"
 )
 
+
 /* =========================
-   TOKEN (anonymous identity)
+   ANON PLAYER IDENTITY
 ========================= */
 
 function getToken() {
@@ -95,7 +106,6 @@ let channel = null
 
 async function createGame() {
   console.log("createGame clicked")
-
   const code = document.getElementById("createCode").value
   const name = document.getElementById("createName").value
 
@@ -105,7 +115,8 @@ async function createGame() {
     p_token: getToken()
   })
 
-  console.log("create_game result:", { data, error })
+console.log("createGame result:", { data, error })
+
 
   if (error) {
     alert(error.message)
@@ -114,9 +125,8 @@ async function createGame() {
 
   currentGameId = data
   document.getElementById("gameId").innerText = data
-
-  await loadPlayers(data)     // initial load
-  subscribeToGame(data)       // realtime
+  await loadPlayers(data) 
+  subscribeToGame(data)
 }
 
 /* =========================
@@ -125,7 +135,6 @@ async function createGame() {
 
 async function joinGame() {
   console.log("joinGame clicked")
-
   const code = document.getElementById("joinCode").value
   const name = document.getElementById("joinName").value
 
@@ -135,7 +144,7 @@ async function joinGame() {
     p_token: getToken()
   })
 
-  console.log("join_game result:", { data, error })
+  console.log("joinGame result:", { data, error })
 
   if (error) {
     alert(error.message)
@@ -144,46 +153,13 @@ async function joinGame() {
 
   currentGameId = data
   document.getElementById("gameId").innerText = data
-
-  await loadPlayers(data)
+  await loadPlayers(data) 
   subscribeToGame(data)
 }
 
 /* =========================
-   LOAD PLAYERS
+   SUBSCRIBE TO GAME
 ========================= */
-
-async function loadPlayers(gameId) {
-  console.log("loading players for", gameId)
-
-  const { data, error } = await supabaseClient
-    .from("IDRWplayers")
-    .select("*")
-    .eq("game_id", gameId)
-
-  console.log("players response:", { data, error })
-
-  if (error) {
-    console.error("Supabase error:", error)
-    return
-  }
-
-  if (!data) return
-
-  const container = document.getElementById("players")
-  container.innerHTML = ""
-
-  data.forEach(p => {
-    const div = document.createElement("div")
-    div.innerText = `Seat ${p.seat_number}: ${p.display_name}`
-    container.appendChild(div)
-  })
-}
-
-/* =========================
-   REALTIME SUBSCRIPTION
-========================= */
-
 function subscribeToGame(gameId) {
 
   if (channel) {
@@ -192,7 +168,7 @@ function subscribeToGame(gameId) {
 
   channel = supabaseClient.channel(`game-${gameId}`)
 
-  // 🔥 LOBBY SYNC (players)
+  // 🔥 LOBBY SYNC: players table
   channel.on(
     "postgres_changes",
     {
@@ -200,13 +176,13 @@ function subscribeToGame(gameId) {
       schema: "public",
       table: "IDRWplayers"
     },
-    async (payload) => {
-      console.log("🔥 PLAYER EVENT:", payload)
-      await loadPlayers(currentGameId)
+    async () => {
+      console.log("lobby update → reloading players")
+      await loadPlayers(gameId)
     }
   )
 
-  // 🔥 GAME STATE SYNC
+  // 🔥 GAME STATE SYNC (optional for now)
   channel.on(
     "postgres_changes",
     {
@@ -215,17 +191,36 @@ function subscribeToGame(gameId) {
       table: "IDRWgames",
       filter: `id=eq.${gameId}`
     },
-    (payload) => {
-      console.log("🎮 GAME EVENT:", payload)
-
+    async (payload) => {
       const game = payload.new
+
       document.getElementById("gameStatus").innerText = game.status
       document.getElementById("gameTurn").innerText = game.current_turn
     }
   )
 
-  channel.subscribe((status) => {
-    console.log("Realtime status:", status)
+  channel.subscribe()
+}
+
+
+/* =========================
+   LOAD PLAYERS
+========================= */
+
+async function loadPlayers(gameId) {
+  const { data } = await supabaseClient
+    .from("idrwplayers")
+    .select("*")
+    .eq("game_id", gameId)
+
+  const container = document.getElementById("players")
+  container.innerHTML = ""
+
+  data.forEach(p => {
+    const div = document.createElement("div")
+    div.className = "player"
+    div.innerText = `Seat ${p.seat_number}: ${p.display_name}`
+    container.appendChild(div)
   })
 }
 
