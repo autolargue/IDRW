@@ -78,7 +78,7 @@ const supabaseClient = supabase.createClient(
 )
 
 /* =========================
-   ANON PLAYER IDENTITY
+   PLAYER TOKEN
 ========================= */
 
 function getToken() {
@@ -104,8 +104,6 @@ let channel = null
 ========================= */
 
 async function createGame() {
-  console.log("createGame clicked")
-
   const code = document.getElementById("createCode").value.toUpperCase()
   const name = document.getElementById("createName").value
 
@@ -119,8 +117,6 @@ async function createGame() {
     p_display_name: name,
     p_token: getToken()
   })
-
-  console.log("createGame result:", { data, error })
 
   if (error) {
     alert(error.message)
@@ -139,8 +135,6 @@ async function createGame() {
 ========================= */
 
 async function joinGame() {
-  console.log("joinGame clicked")
-
   const code = document.getElementById("joinCode").value.toUpperCase()
   const name = document.getElementById("joinName").value
 
@@ -155,8 +149,6 @@ async function joinGame() {
     p_token: getToken()
   })
 
-  console.log("joinGame result:", { data, error })
-
   if (error) {
     alert(error.message)
     return
@@ -170,7 +162,7 @@ async function joinGame() {
 }
 
 /* =========================
-   SUBSCRIBE TO GAME
+   REALTIME SYNC
 ========================= */
 
 function subscribeToGame(gameId) {
@@ -181,22 +173,23 @@ function subscribeToGame(gameId) {
 
   channel = supabaseClient.channel(`game-${gameId}`)
 
-  // PLAYERS SYNC (filtered to current game)
+  // 🔥 MASTER SYNC TRIGGER
+  // Any update to game row forces full player refresh
   channel.on(
     "postgres_changes",
     {
-      event: "*",
+      event: "UPDATE",
       schema: "public",
-      table: "idrwplayers",
-      filter: `game_id=eq.${gameId}`
+      table: "idrwgames",
+      filter: `id=eq.${gameId}`
     },
     async () => {
-      console.log("lobby update → reloading players")
+      console.log("game update → refreshing players")
       await loadPlayers(gameId)
     }
   )
 
-  // GAME STATE SYNC
+  // UI state updates (optional)
   channel.on(
     "postgres_changes",
     {
@@ -205,7 +198,7 @@ function subscribeToGame(gameId) {
       table: "IDRWgames",
       filter: `id=eq.${gameId}`
     },
-    async (payload) => {
+    (payload) => {
       const game = payload.new
 
       document.getElementById("gameStatus").innerText = game.status
@@ -227,7 +220,7 @@ async function loadPlayers(gameId) {
     .eq("game_id", gameId)
 
   if (error) {
-    console.error("loadPlayers error:", error)
+    console.error(error)
     return
   }
 
